@@ -6,3 +6,7 @@ python-dotenv
 
 # Testing
 pytest
+
+# LLM provider SDKs
+groq
+google-genai
