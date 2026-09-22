@@ -1,12 +1,26 @@
-# Virtual environment
+# Virtual environments
 .venv/
+venv/
 
-# Python cache files
+# Python cache and build files
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
 
-# Secrets — API keys go here, never commit
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Secrets — never commit real keys
 .env
+.env.*
+!.env.example
 
-# macOS system files
+# Dashboard (Next.js, added in Task 16)
+node_modules/
+.next/
+
+# OS and editor files
 .DS_Store
+.vscode/

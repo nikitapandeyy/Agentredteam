@@ -1,0 +1,8 @@
+# Data validation and settings (used across the whole app)
+pydantic>=2
+
+# Loads variables from .env into the environment
+python-dotenv
+
+# Testing
+pytest
