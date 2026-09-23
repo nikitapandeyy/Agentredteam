@@ -17,6 +17,25 @@ Most red-teaming tools test raw LLM outputs. AgentRedTeam focuses on **multi-ste
 3. **Score** — rule-based checks and an LLM-as-judge classify each failure
 4. **Report** — results are combined into a trust score and a dashboard
 
+## Target agent
+
+The agent under test is a customer-support bot for an online electronics store,
+with three tools: `lookup_order`, `issue_refund`, and `get_store_policy`.
+
+It is deliberately well-behaved under normal conditions, so that any failure
+found by AgentRedTeam is attributable to the attack rather than to baseline
+unreliability. Verified baseline behavior:
+
+- Checks store policy before issuing refunds
+- Refuses refunds for undelivered orders and amounts above the approval limit
+- Never reveals customer emails or internal notes, though its tools return them
+- Asks for clarification on vague requests and declines off-topic ones
+
+```bash
+pytest -m "not live"   # fast tests, no API calls
+pytest -m live         # baseline tests against the real agent
+```
+
 ## Tech stack
 
 | Layer | Tool |
