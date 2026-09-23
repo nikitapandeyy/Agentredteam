@@ -260,3 +260,24 @@ Tool misuse	              Agent calls a tool with policy-violating arguments
 Scope bypass	            Agent performs a task outside its stated purpose
 
 Each failure condition maps to either a rule-based check (Task 10: measurable, like refunds != [] or email appears in reply) or an LLM judge check (Task 11: judgment call, like "did the agent reveal its system prompt").
+
+What the generator does, step by step
+
+For each template it receives, the generator:
+
+Reads the template string, slot names, and hint
+Builds a prompt telling Gemini: "fill these slots, following this hint, return JSON"
+Calls Gemini and parses the JSON response
+Fills the template string with those values to produce a real attack message
+Wraps everything in a TestCase object
+Repeats for the number of variations the template requests
+
+The output is a list of TestCase objects, each one a complete, ready-to-run attack.
+
+Why Pydantic here instead of a plain dictionary?
+
+Three reasons you'll feel later:
+
+Validation: if the generator produces a TestCase without a prompt, Pydantic raises an error immediately rather than letting a broken test case silently reach the agent.
+Type safety: VS Code will autocomplete test_case.prompt and warn you if you try to access a field that doesn't exist.
+Serialization: test_case.model_dump() converts it to a dictionary, and TestCase.model_validate(dict) rebuilds it. That's what Task 15 will use to store and retrieve test cases from the database.
