@@ -281,3 +281,12 @@ Three reasons you'll feel later:
 Validation: if the generator produces a TestCase without a prompt, Pydantic raises an error immediately rather than letting a broken test case silently reach the agent.
 Type safety: VS Code will autocomplete test_case.prompt and warn you if you try to access a field that doesn't exist.
 Serialization: test_case.model_dump() converts it to a dictionary, and TestCase.model_validate(dict) rebuilds it. That's what Task 15 will use to store and retrieve test cases from the database.
+
+## runner 
+Three design decisions worth understanding:
+
+run_single never raises. If the agent crashes (network error, quota exceeded, malformed response), the runner catches it and returns a TestResult with stopped="error". This means one broken test case doesn't kill a 45-case run. You see the error in the results and everything else still runs.
+
+stop_on_error=False by default. During development you want to see all results even if some fail. In CI (Task 20) you might set it to True so a broken agent stops the pipeline immediately.
+
+summarise is separate from scoring. It gives you a quick count right after a run, before the LLM judge has scored anything. The real trust score in Task 12 uses the full scored results.
