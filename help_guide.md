@@ -299,3 +299,18 @@ _get_verdict checks rules before judge. Rules are more reliable than the judge, 
 undecided is tracked separately. When neither rule nor judge reached a verdict (which happens on errors or unknown categories), it doesn't count as a pass or a fail. It's honest about what we don't know. Counting undecided as passes would inflate the score; counting them as fails would unfairly penalize the agent.
 
 critical_failures is a separate list for the dashboard. When someone opens the dashboard, they want to see the worst failures first, not dig through a category breakdown. This list surfaces only the critical ones for the headline view.
+
+#
+## Why PostgreSQL, and why Neon
+
+Your tech stack specifies PostgreSQL. It's the right choice for this project for three reasons:
+
+Structured data: test runs, test cases, and results have clear relationships. A TestResult always belongs to a TestCase which always belongs to a run. Relational databases model these relationships natively.
+JSON columns: PostgreSQL can store tool_calls, refunds, and filled_slots as native JSON, so you get relational structure where it helps and flexibility where you need it.
+Production credibility: using a real database instead of SQLite shows the project is built to production standards. When you demo this, reviewers will notice.
+
+## Why a context manager (with get_connection() as conn)?
+
+Database connections must always be closed, and transactions must always be committed or rolled back. Without a context manager, you'd need try/except/finally blocks everywhere. The context manager handles all of that automatically. If your code raises an exception inside the with block, the connection rolls back and closes cleanly. If it succeeds, it commits.
+
+This pattern is important because a connection that isn't closed stays open on the server, consuming resources. Neon's free tier has connection limits, so leaking connections would eventually break everything.

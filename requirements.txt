@@ -10,3 +10,6 @@ pytest
 # LLM provider SDKs
 groq
 google-genai
+
+# PostgreSQL database
+psycopg[binary]>=3.1     # modern PostgreSQL driver for Python
