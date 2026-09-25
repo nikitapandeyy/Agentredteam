@@ -290,3 +290,12 @@ run_single never raises. If the agent crashes (network error, quota exceeded, ma
 stop_on_error=False by default. During development you want to see all results even if some fail. In CI (Task 20) you might set it to True so a broken agent stops the pipeline immediately.
 
 summarise is separate from scoring. It gives you a quick count right after a run, before the LLM judge has scored anything. The real trust score in Task 12 uses the full scored results.
+
+## test score
+Three design decisions worth understanding:
+
+_get_verdict checks rules before judge. Rules are more reliable than the judge, so they take priority. If a rule said False, that's a confirmed failure regardless of what the judge would say.
+
+undecided is tracked separately. When neither rule nor judge reached a verdict (which happens on errors or unknown categories), it doesn't count as a pass or a fail. It's honest about what we don't know. Counting undecided as passes would inflate the score; counting them as fails would unfairly penalize the agent.
+
+critical_failures is a separate list for the dashboard. When someone opens the dashboard, they want to see the worst failures first, not dig through a category breakdown. This list surfaces only the critical ones for the headline view.
