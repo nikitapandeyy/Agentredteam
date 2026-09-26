@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -52,6 +53,15 @@ app = FastAPI(
 )
 
 # CORS allows the dashboard (running on a different port/domain) to call the API
+# Serve the dashboard at /dashboard
+import os
+dashboard_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "dashboard"
+)
+if os.path.exists(dashboard_path):
+    app.mount("/dashboard", StaticFiles(directory=dashboard_path, html=True), name="dashboard")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],    # tightened in Task 19 (production)

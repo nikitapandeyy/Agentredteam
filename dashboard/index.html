@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AgentRedTeam — Trust Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+  <style>
+    /* ── Reset & tokens ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --pass:      #3fb950;
+      --fail:      #f85149;
+      --warn:      #d29922;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+    }
+
+    /* ── Layout ─────────────────────────────────────────────── */
+    .shell {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    .header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+      margin-bottom: 40px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .wordmark {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .run-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── Trust score hero ────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      padding: 48px 0 56px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+    }
+
+    .score-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .score-number {
+      font-family: var(--mono);
+      font-size: clamp(72px, 14vw, 120px);
+      font-weight: 700;
+      line-height: 1;
+      transition: color 0.3s;
+    }
+
+    .score-number.high   { color: var(--pass); }
+    .score-number.medium { color: var(--warn); }
+    .score-number.low    { color: var(--fail); }
+
+    .score-denom {
+      font-family: var(--mono);
+      font-size: 28px;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    .summary-text {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .totals {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-top: 24px;
+    }
+
+    .total-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .total-item .val {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .total-item .lbl {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .val.pass { color: var(--pass); }
+    .val.fail { color: var(--fail); }
+    .val.neutral { color: var(--text); }
+
+    /* ── Section headings ────────────────────────────────────── */
+    .section-heading {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 20px;
+    }
+
+    /* ── Category table ──────────────────────────────────────── */
+    .categories { margin-bottom: 48px; }
+
+    .cat-row {
+      display: grid;
+      grid-template-columns: 1fr 80px 80px 80px 120px;
+      gap: 8px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cat-row.header-row {
+      font-size: 11px;
+      color: var(--muted);
+      padding-bottom: 8px;
+      font-family: var(--mono);
+    }
+
+    .cat-name {
+      font-family: var(--mono);
+      font-size: 13px;
+    }
+
+    .cat-stat {
+      font-family: var(--mono);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .cat-stat.pass { color: var(--pass); }
+    .cat-stat.fail { color: var(--fail); }
+
+    /* Severity badge */
+    .badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-weight: 700;
+    }
+
+    .badge.critical { background: rgba(248,81,73,0.15); color: var(--fail); }
+    .badge.high     { background: rgba(210,153,34,0.15); color: var(--warn); }
+    .badge.medium   { background: rgba(63,185,80,0.12); color: var(--pass); }
+
+    /* Bar */
+    .bar-track {
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.6s ease;
+    }
+
+    .bar-fill.pass   { background: var(--pass); }
+    .bar-fill.warn   { background: var(--warn); }
+    .bar-fill.fail   { background: var(--fail); }
+
+    .bar-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .bar-pct {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    /* ── Failures list ───────────────────────────────────────── */
+    .failures { margin-bottom: 48px; }
+
+    .failure-item {
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--fail);
+      padding: 16px;
+      margin-bottom: 12px;
+      background: var(--surface);
+    }
+
+    .failure-meta {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .failure-category {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--fail);
+    }
+
+    .failure-source {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--border);
+      padding: 2px 6px;
+      border-radius: 2px;
+    }
+
+    .failure-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-family: var(--mono);
+    }
+
+    .failure-text {
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 12px;
+      font-family: var(--mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+
+    .failure-reason {
+      font-size: 12px;
+      color: var(--warn);
+      background: rgba(210,153,34,0.08);
+      padding: 8px 12px;
+      border-left: 2px solid var(--warn);
+    }
+
+    /* ── Empty state ─────────────────────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 13px;
+      border: 1px dashed var(--border);
+    }
+
+    /* ── Run selector ────────────────────────────────────────── */
+    .run-selector {
+      margin-bottom: 40px;
+    }
+
+    .run-selector select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 8px 12px;
+      width: 100%;
+      max-width: 480px;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+
+    .run-selector select:focus {
+      outline: 1px solid var(--pass);
+    }
+
+    /* ── Loading / error ─────────────────────────────────────── */
+    .status-bar {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      padding: 12px 0;
+      min-height: 20px;
+    }
+
+    .status-bar.error { color: var(--fail); }
+
+    /* ── New run button ──────────────────────────────────────── */
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+      align-items: center;
+    }
+
+    .btn {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      border-radius: 2px;
+      transition: border-color 0.15s;
+    }
+
+    .btn:hover { border-color: var(--pass); color: var(--pass); }
+    .btn.primary {
+      border-color: var(--pass);
+      color: var(--pass);
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .category-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 2px;
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .chip.selected {
+      border-color: var(--pass);
+      color: var(--pass);
+      background: rgba(63,185,80,0.08);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .bar-fill, .score-number { transition: none; }
+    }
+
+    @media (max-width: 600px) {
+      .cat-row {
+        grid-template-columns: 1fr 60px 60px;
+      }
+      .cat-row .bar-wrap,
+      .cat-row .cat-stat:last-child { display: none; }
+      .totals { gap: 20px; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="header">
+    <span class="wordmark">AGENTREDTEAM</span>
+    <span class="run-meta" id="run-meta">no run loaded</span>
+  </header>
+
+  <!-- Run selector -->
+  <div class="run-selector">
+    <select id="run-select" onchange="loadRun(this.value)">
+      <option value="">Loading runs...</option>
+    </select>
+    <div class="status-bar" id="status">Connecting to API...</div>
+  </div>
+
+  <!-- Actions: trigger a new run -->
+  <div class="actions">
+    <button class="btn primary" id="run-btn" onclick="triggerRun()" disabled>
+      + run new test suite
+    </button>
+    <div class="category-chips" id="chips"></div>
+  </div>
+
+  <!-- Trust score hero -->
+  <section class="hero" id="hero" style="display:none">
+    <div class="score-label">TRUST SCORE</div>
+    <div>
+      <span class="score-number" id="score-number">--</span>
+      <span class="score-denom">/100</span>
+    </div>
+    <div class="summary-text" id="summary-text"></div>
+    <div class="totals">
+      <div class="total-item">
+        <span class="val neutral" id="total-cases">--</span>
+        <span class="lbl">cases</span>
+      </div>
+      <div class="total-item">
+        <span class="val pass" id="total-passed">--</span>
+        <span class="lbl">passed</span>
+      </div>
+      <div class="total-item">
+        <span class="val fail" id="total-failed">--</span>
+        <span class="lbl">failed</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Category breakdown -->
+  <section class="categories" id="categories-section" style="display:none">
+    <div class="section-heading">BY CATEGORY</div>
+    <div class="cat-row header-row">
+      <span>category</span>
+      <span style="text-align:right">passed</span>
+      <span style="text-align:right">failed</span>
+      <span style="text-align:right">total</span>
+      <span>pass rate</span>
+    </div>
+    <div id="categories-list"></div>
+  </section>
+
+  <!-- Failures -->
+  <section class="failures" id="failures-section" style="display:none">
+    <div class="section-heading">FAILURES</div>
+    <div id="failures-list"></div>
+  </section>
+
+</div>
+
+<script>
+  // ── Config ───────────────────────────────────────────────────
+  // Points at your local FastAPI server by default.
+  // Task 19 will update this to the Cloud Run URL.
+  const API = 'http://localhost:8000';
+
+  const ALL_CATEGORIES = [
+    'tool_misuse',
+    'instruction_contradiction',
+    'data_exfiltration',
+    'prompt_injection_direct',
+    'prompt_injection_indirect',
+    'role_confusion',
+    'scope_bypass',
+  ];
+
+  let selectedCategories = new Set(['tool_misuse', 'data_exfiltration']);
+
+  // ── Category chips ────────────────────────────────────────────
+  function renderChips() {
+    const container = document.getElementById('chips');
+    container.innerHTML = ALL_CATEGORIES.map(cat => {
+      const sel = selectedCategories.has(cat);
+      return `<span class="chip ${sel ? 'selected' : ''}"
+                onclick="toggleCat('${cat}')">${cat.replace(/_/g, ' ')}</span>`;
+    }).join('');
+  }
+
+  function toggleCat(cat) {
+    if (selectedCategories.has(cat)) {
+      selectedCategories.delete(cat);
+    } else {
+      selectedCategories.add(cat);
+    }
+    renderChips();
+  }
+
+  renderChips();
+
+  // ── Status helpers ────────────────────────────────────────────
+  function setStatus(msg, isError = false) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status-bar' + (isError ? ' error' : '');
+  }
+
+  // ── Load run list ─────────────────────────────────────────────
+  async function loadRuns() {
+    try {
+      const res = await fetch(`${API}/runs?limit=20`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const runs = await res.json();
+
+      const sel = document.getElementById('run-select');
+      document.getElementById('run-btn').disabled = false;
+
+      if (runs.length === 0) {
+        sel.innerHTML = '<option value="">No runs yet — trigger one above</option>';
+        setStatus('No runs found. Select categories and click "+ run new test suite".');
+        return;
+      }
+
+      sel.innerHTML = runs.map(r => {
+        const date = r.started_at
+          ? new Date(r.started_at).toLocaleString()
+          : 'unknown';
+        const score = r.trust_score !== null ? `${r.trust_score}/100` : 'pending';
+        return `<option value="${r.run_id}">
+          ${date} — score: ${score} — ${r.total_cases} cases (${r.run_id})
+        </option>`;
+      }).join('');
+
+      setStatus('');
+      // Auto-load the most recent run
+      loadRun(runs[0].run_id);
+
+    } catch (e) {
+      setStatus(`Cannot reach API at ${API}. Is uvicorn running?`, true);
+      document.getElementById('run-select').innerHTML =
+        '<option value="">API unavailable</option>';
+    }
+  }
+
+  // ── Load one report ───────────────────────────────────────────
+  async function loadRun(runId) {
+    if (!runId) return;
+    setStatus(`Loading report ${runId}...`);
+
+    try {
+      const res = await fetch(`${API}/report/${runId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const report = await res.json();
+      renderReport(report);
+      setStatus('');
+    } catch (e) {
+      setStatus(`Failed to load report: ${e.message}`, true);
+    }
+  }
+
+  // ── Render report ─────────────────────────────────────────────
+  function renderReport(r) {
+    // Meta
+    const date = r.started_at
+      ? new Date(r.started_at).toLocaleString()
+      : '';
+    document.getElementById('run-meta').textContent =
+      `run ${r.run_id}  ·  ${date}  ·  ${r.agent_name}`;
+
+    // Hero score
+    const scoreEl = document.getElementById('score-number');
+    scoreEl.textContent = r.trust_score;
+    scoreEl.className = 'score-number ' +
+      (r.trust_score >= 90 ? 'high' : r.trust_score >= 60 ? 'medium' : 'low');
+
+    document.getElementById('summary-text').textContent = r.summary || '';
+    document.getElementById('total-cases').textContent = r.total_cases;
+    document.getElementById('total-passed').textContent = r.total_passed;
+    document.getElementById('total-failed').textContent = r.total_failed;
+    document.getElementById('hero').style.display = '';
+
+    // Categories
+    const catList = document.getElementById('categories-list');
+    if (r.categories && r.categories.length > 0) {
+      catList.innerHTML = r.categories.map(cat => {
+        const total   = cat.total || 0;
+        const passed  = cat.passed || 0;
+        const failed  = cat.failed || 0;
+        const pct     = total > 0 ? Math.round((passed / total) * 100) : 100;
+        const barCls  = pct >= 90 ? 'pass' : pct >= 60 ? 'warn' : 'fail';
+        const name    = cat.category.replace(/_/g, ' ');
+
+        return `<div class="cat-row">
+          <span class="cat-name">${name}</span>
+          <span class="cat-stat pass">${passed}</span>
+          <span class="cat-stat fail">${failed || 0}</span>
+          <span class="cat-stat">${total}</span>
+          <div class="bar-wrap">
+            <div class="bar-track">
+              <div class="bar-fill ${barCls}" style="width:${pct}%"></div>
+            </div>
+            <span class="bar-pct">${pct}%</span>
+          </div>
+        </div>`;
+      }).join('');
+      document.getElementById('categories-section').style.display = '';
+    }
+
+    // Failures
+    const failList = document.getElementById('failures-list');
+    if (r.failures && r.failures.length > 0) {
+      failList.innerHTML = r.failures.map(f => `
+        <div class="failure-item">
+          <div class="failure-meta">
+            <span class="failure-category">${f.category.replace(/_/g, ' ')}</span>
+          </div>
+          <div class="failure-label">PROMPT</div>
+          <div class="failure-text">${escHtml(f.prompt)}</div>
+          <div class="failure-label">REPLY</div>
+          <div class="failure-text">${escHtml((f.reply || '').slice(0, 400))}${f.reply && f.reply.length > 400 ? '…' : ''}</div>
+          <div class="failure-reason">${escHtml(f.failure_reason || 'no reason recorded')}</div>
+        </div>
+      `).join('');
+      document.getElementById('failures-section').style.display = '';
+    } else {
+      failList.innerHTML = '<div class="empty">no failures recorded for this run</div>';
+      document.getElementById('failures-section').style.display = '';
+    }
+  }
+
+  // ── Trigger new run ───────────────────────────────────────────
+  async function triggerRun() {
+    if (selectedCategories.size === 0) {
+      setStatus('Select at least one category first.', true);
+      return;
+    }
+
+    const btn = document.getElementById('run-btn');
+    btn.disabled = true;
+    btn.textContent = 'running...';
+    setStatus('Generating attacks and running against agent. This takes 2–5 minutes...');
+
+    try {
+      const res = await fetch(`${API}/run-test-suite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          categories: [...selectedCategories],
+          agent_name: 'Customer Support Agent v1',
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+
+      const result = await res.json();
+      setStatus(`Run ${result.run_id} complete. Score: ${result.trust_score}/100`);
+      await loadRuns();
+
+    } catch (e) {
+      setStatus(`Run failed: ${e.message}`, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '+ run new test suite';
+    }
+  }
+
+  // ── Escape HTML to prevent XSS ────────────────────────────────
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────
+  loadRuns();
+</script>
+</body>
+</html>
