@@ -13,3 +13,7 @@ google-genai
 
 # PostgreSQL database
 psycopg[binary]>=3.1     # modern PostgreSQL driver for Python
+
+# API server
+fastapi>=0.100
+uvicorn[standard]>=0.20    # the server that runs FastAPI

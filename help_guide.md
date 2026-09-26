@@ -314,3 +314,29 @@ Production credibility: using a real database instead of SQLite shows the projec
 Database connections must always be closed, and transactions must always be committed or rolled back. Without a context manager, you'd need try/except/finally blocks everywhere. The context manager handles all of that automatically. If your code raises an exception inside the with block, the connection rolls back and closes cleanly. If it succeeds, it commits.
 
 This pattern is important because a connection that isn't closed stays open on the server, consuming resources. Neon's free tier has connection limits, so leaking connections would eventually break everything.
+
+What just happened, and why it matters
+
+Your database has three tables that mirror your Python models exactly:
+
+test_runs    → one row per pipeline execution
+test_cases   → one row per generated attack
+test_results → one row per agent response + score
+
+The foreign keys (REFERENCES test_runs(id)) create links between them, so you can ask questions like "show me all failures from run 9a80b095" or "how many times has the data_exfiltration category failed across all runs." That's what makes the dashboard in Task 16 possible.
+
+## What FastAPI is and why it fits here
+
+FastAPI is a Python web framework that turns your Python functions into HTTP endpoints. You write a function, add a decorator like @app.post("/run-test-suite"), and FastAPI handles the HTTP layer: parsing request bodies, validating types with Pydantic, serializing responses to JSON, and generating automatic documentation.
+
+The automatic documentation is worth emphasizing. FastAPI reads your Pydantic models and generates an interactive API explorer at /docs. When you demo this project, you can open that page and run a live test suite from a browser form. That's a strong demo moment.
+
+## Three FastAPI concepts you're using here:
+
+@app.on_event("startup") runs once when the server starts. We use it to create database tables, so the server always has a working schema before it handles any requests.
+
+HTTPException is how you return error responses. raise HTTPException(status_code=404, detail="...") produces a proper JSON error response with the right HTTP status code. The client (dashboard or curl) gets {"detail": "No report found for run ID: xyz"} with a 404 status.
+
+response_model=RunTestSuiteResponse tells FastAPI what shape the response will have. It validates the output, strips any extra fields, and includes that model in the /docs page so API users know what to expect.
+
+## What changed: every conn.execute() and conn.executemany() call now goes through conn.cursor(). In psycopg3, the cursor is the object that executes SQL. The connection manages transactions (commit/rollback), the cursor executes statements. That's the correct split in the API.
