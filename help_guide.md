@@ -340,3 +340,10 @@ HTTPException is how you return error responses. raise HTTPException(status_code
 response_model=RunTestSuiteResponse tells FastAPI what shape the response will have. It validates the output, strips any extra fields, and includes that model in the /docs page so API users know what to expect.
 
 ## What changed: every conn.execute() and conn.executemany() call now goes through conn.cursor(). In psycopg3, the cursor is the object that executes SQL. The connection manages transactions (commit/rollback), the cursor executes statements. That's the correct split in the API.
+
+
+## What Docker does and why it matters here
+
+Right now your app depends on: Python 3.12 installed by Homebrew, packages installed in .venv, environment variables in .env, and your Mac's file system. Nobody else has that exact setup.
+
+A Docker image is a self-contained snapshot: it includes the OS, the Python version, every package, and the startup command. A Docker container is a running instance of that image. Cloud Run in Task 19 takes your image and runs it on Google's servers, identical to how it runs on your Mac.

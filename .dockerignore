@@ -1,0 +1,30 @@
+# Never include secrets
+.env
+.env.*
+
+# Virtual environment — packages come from requirements.txt
+.venv/
+venv/
+
+# Git history
+.git/
+.gitignore
+
+# Development files
+tests/
+scripts/
+help_guide.md
+pytest.ini
+*.md
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Docker itself
+Dockerfile
+.dockerignore
+
+# macOS
+.DS_Store

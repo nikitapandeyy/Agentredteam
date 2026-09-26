@@ -471,7 +471,8 @@
   // ── Config ───────────────────────────────────────────────────
   // Points at your local FastAPI server by default.
   // Task 19 will update this to the Cloud Run URL.
-  const API = 'http://localhost:8000';
+  // Use relative URLs so the dashboard works on any host/port
+  const API = '';
 
   const ALL_CATEGORIES = [
     'tool_misuse',
