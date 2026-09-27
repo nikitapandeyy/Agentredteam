@@ -347,3 +347,14 @@ response_model=RunTestSuiteResponse tells FastAPI what shape the response will h
 Right now your app depends on: Python 3.12 installed by Homebrew, packages installed in .venv, environment variables in .env, and your Mac's file system. Nobody else has that exact setup.
 
 A Docker image is a self-contained snapshot: it includes the OS, the Python version, every package, and the startup command. A Docker container is a running instance of that image. Cloud Run in Task 19 takes your image and runs it on Google's servers, identical to how it runs on your Mac.
+
+## github workflow 
+Four things worth understanding:
+
+${{ github.sha }} is the commit hash, like 66931a7. We tag each image with both :latest and the commit hash. That means you can always roll back to a specific commit's image by deploying that tag.
+
+workflow_dispatch adds a "Run workflow" button in GitHub's Actions tab. Useful for forcing a redeploy without making a code change.
+
+--quiet suppresses interactive prompts in the deploy command. GitHub Actions can't respond to prompts, so any prompt would hang forever.
+
+uses: actions/checkout@v4 is a pre-built action from GitHub's marketplace. It clones your repo onto the runner machine. The @v4 pins it to a specific version.

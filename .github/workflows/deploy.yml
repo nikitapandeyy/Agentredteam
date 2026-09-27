@@ -1,0 +1,66 @@
+name: Build and Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main          # triggers on every push to main
+  workflow_dispatch:  # also allows manual trigger from GitHub UI
+
+env:
+  PROJECT_ID: agentredteam
+  REGION: asia-south1
+  REPOSITORY: agentredteam
+  SERVICE: agentredteam
+  IMAGE: asia-south1-docker.pkg.dev/agentredteam/agentredteam/api
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest   # GitHub provides this Linux machine for free
+
+    steps:
+      # Step 1: Get the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      # Step 3: Configure Docker to use Google's registry
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      # Step 4: Build and push the image
+      # Uses linux/amd64 because Cloud Run runs on Intel/AMD servers
+      - name: Build and push Docker image
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -t ${{ env.IMAGE }}:${{ github.sha }} \
+            -t ${{ env.IMAGE }}:latest \
+            --push \
+            .
+
+      # Step 5: Deploy the new image to Cloud Run
+      # Re-uses all existing configuration (secrets, memory, timeout)
+      # Only the image tag changes
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --quiet
+
+      # Step 6: Print the live URL
+      - name: Show service URL
+        run: |
+          gcloud run services describe ${{ env.SERVICE }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --project ${{ env.PROJECT_ID }} \
+            --format 'value(status.url)'
