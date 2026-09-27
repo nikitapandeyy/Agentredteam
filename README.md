@@ -62,6 +62,11 @@ app/
 tests/         # pytest test suite
 ```
 
+## Live demo
+
+**API:** https://agentredteam-366601458048.asia-south1.run.app  
+**Dashboard:** https://agentredteam-366601458048.asia-south1.run.app/dashboard
+
 ## Getting started
 
 Requires Python 3.12+.
