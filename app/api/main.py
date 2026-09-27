@@ -85,12 +85,25 @@ async def startup() -> None:
 # ---------------------------------------------------------------------------
 
 class RunTestSuiteRequest(BaseModel):
-    categories: list[str] | None = None    # None = run all categories
+    categories: list[str] | None = None
     agent_name: str = "Customer Support Agent"
+    agent_url: str | None = None
+    agent_context: dict | None = None  # AgentContext fields as a dict
 
     model_config = {
         "json_schema_extra": {
             "examples": [
+                {
+                    "categories": ["scope_bypass", "data_exfiltration"],
+                    "agent_name": "Legal Document Assistant",
+                    "agent_url": "https://my-agent.example.com/chat",
+                    "agent_context": {
+                        "purpose": "Summarise legal documents for law firms",
+                        "sensitive_data": ["client names", "case details"],
+                        "rules": ["Never share one client data with another"],
+                        "example_topics": ["contract review", "NDA summary"],
+                    },
+                },
                 {
                     "categories": ["tool_misuse", "data_exfiltration"],
                     "agent_name": "Customer Support Agent v1",
@@ -183,11 +196,20 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
     )
 
     try:
-        # Step 1: Generate
+        # Step 1: Build agent context
+        from app.attacks.context import AgentContext, DEFAULT_CONTEXT
+        agent_context = (
+            AgentContext(**request.agent_context)
+            if request.agent_context
+            else DEFAULT_CONTEXT
+        )
+
+        # Step 2: Generate
         logger.info("[%s] Generating test cases...", run_id)
         cases = generate_all(
             categories=request.categories,
             delay=2.0,
+            agent_context=agent_context,
         )
 
         if not cases:
@@ -206,7 +228,7 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
 
         # Step 4: Run against agent
         logger.info("[%s] Running %d cases against agent...", run_id, len(cases))
-        results = run_suite(cases, delay=3.0)
+        results = run_suite(cases, agent_url=request.agent_url)
 
         # Step 5: Score — rules
         logger.info("[%s] Applying rule-based scoring...", run_id)
@@ -214,7 +236,7 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
 
         # Step 6: Score — judge
         logger.info("[%s] Applying LLM judge...", run_id)
-        final_results = judge_suite(rule_scored, delay=2.0)
+        final_results = judge_suite(rule_scored, delay=2.0, agent_context=agent_context)
 
         # Step 7: Compute trust report
         report = compute_trust_score(

@@ -121,11 +121,19 @@ def judge_result(
     client: genai.Client | None = None,
     max_retries: int = 3,
     base_delay: float = 5.0,
+    agent_context=None,
 ) -> TestResult:
     """Judge one TestResult using Gemini.
 
     Only judges results where rule_passed is None.
     Results already decided by rules are returned unchanged.
+
+    Args:
+        result:        the TestResult to judge
+        client:        optional pre-built Gemini client
+        max_retries:   retries on transient errors
+        base_delay:    initial retry delay in seconds
+        agent_context: optional AgentContext for domain-aware judging
 
     Returns a new TestResult with judge_passed and failure_reason filled in.
     """
@@ -146,7 +154,14 @@ def judge_result(
         client = genai.Client()
 
     model = os.environ["GEMINI_MODEL"]
-    prompt = _build_judge_prompt(result, category.failure_definition)
+
+    # Build failure definition, enriched with agent context if provided
+    failure_def = category.failure_definition
+    if agent_context:
+        context_note = agent_context.to_judge_context()
+        failure_def = f"{failure_def}\n\nAgent context:\n{context_note}"
+
+    prompt = _build_judge_prompt(result, failure_def)
 
     delay = base_delay
     last_error = None
@@ -209,6 +224,7 @@ def judge_result(
 def judge_suite(
     results: list[TestResult],
     delay: float = 2.0,
+    agent_context=None,
 ) -> list[TestResult]:
     """Judge every result in a suite that needs it.
 
@@ -216,8 +232,9 @@ def judge_suite(
     passed through unchanged. Only None results are sent to Gemini.
 
     Args:
-        results: list of TestResults, typically after apply_rules_to_suite
-        delay:   seconds between Gemini calls
+        results:       list of TestResults after apply_rules_to_suite
+        delay:         seconds between Gemini calls
+        agent_context: optional AgentContext for domain-aware judging
 
     Returns:
         list of TestResults with judge_passed filled in where applicable
@@ -235,13 +252,13 @@ def judge_suite(
 
     for i, result in enumerate(results):
         if result.rule_passed is not None:
-            # Rules already decided — pass through
             judged.append(result)
             continue
 
-        judged.append(judge_result(result, client=client))
+        judged.append(
+            judge_result(result, client=client, agent_context=agent_context)
+        )
 
-        # Wait between calls, not after the last one
         if i < len(results) - 1:
             time.sleep(delay)
 
