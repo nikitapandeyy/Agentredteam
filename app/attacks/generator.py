@@ -123,9 +123,16 @@ def _call_gemini_with_retry(
             error_str = str(e)
 
             # Only retry on transient errors (503, rate limits, timeouts)
-            is_transient = any(
-                code in error_str
-                for code in ["503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+            # Retry on server errors and per-minute rate limits only.
+            # Daily quota exhaustion (GenerateRequestsPerDay) is not
+            # transient — retrying immediately won't help.
+            is_daily_quota = "GenerateRequestsPerDay" in error_str
+            is_transient = (
+                not is_daily_quota
+                and any(
+                    code in error_str
+                    for code in ["503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+                )
             )
 
             if not is_transient or attempt == max_retries:

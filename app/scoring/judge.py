@@ -199,9 +199,13 @@ def judge_result(
         except Exception as e:
             last_error = e
             error_str = str(e)
-            is_transient = any(
-                code in error_str
-                for code in ["503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+            is_daily_quota = "GenerateRequestsPerDay" in error_str
+            is_transient = (
+                not is_daily_quota
+                and any(
+                    code in error_str
+                    for code in ["503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED"]
+                )
             )
 
             if not is_transient or attempt == max_retries:
