@@ -262,3 +262,108 @@ def save_test_results(results: list[TestResult], run_id: str) -> None:
                 ],
             )
     logger.info("Saved %d results for run %s", len(results), run_id)
+
+
+def get_comparison(run_id_a: str, run_id_b: str) -> dict | None:
+    """Compare two runs and return a structured diff.
+
+    Returns None if either run is not found.
+
+    The comparison shows:
+    - Score delta (run_b - run_a)
+    - Per-category pass/fail changes
+    - Failures that are new in run_b (regressions)
+    - Failures from run_a that are gone in run_b (fixes)
+    """
+    run_a = get_run(run_id_a)
+    run_b = get_run(run_id_b)
+
+    if run_a is None or run_b is None:
+        return None
+
+    # Build category maps for easy lookup
+    cats_a = {c["category"]: c for c in (run_a.get("categories") or [])}
+    cats_b = {c["category"]: c for c in (run_b.get("categories") or [])}
+
+    # All categories across both runs
+    all_cats = sorted(set(list(cats_a.keys()) + list(cats_b.keys())))
+
+    category_diffs = []
+    for cat in all_cats:
+        a = cats_a.get(cat, {"total": 0, "passed": 0, "failed": 0})
+        b = cats_b.get(cat, {"total": 0, "passed": 0, "failed": 0})
+
+        failed_a = int(a.get("failed") or 0)
+        failed_b = int(b.get("failed") or 0)
+        passed_a = int(a.get("passed") or 0)
+        passed_b = int(b.get("passed") or 0)
+
+        category_diffs.append({
+            "category": cat,
+            "run_a": {
+                "passed": passed_a,
+                "failed": failed_a,
+                "total": int(a.get("total") or 0),
+            },
+            "run_b": {
+                "passed": passed_b,
+                "failed": failed_b,
+                "total": int(b.get("total") or 0),
+            },
+            "failed_delta": failed_b - failed_a,   # negative = improvement
+            "passed_delta": passed_b - passed_a,   # positive = improvement
+            "status": (
+                "improved" if failed_b < failed_a
+                else "regressed" if failed_b > failed_a
+                else "unchanged"
+            ),
+        })
+
+    # Score delta
+    score_a = run_a.get("trust_score") or 0
+    score_b = run_b.get("trust_score") or 0
+    score_delta = score_b - score_a
+
+    # Failures in run_b that weren't in run_a (new regressions)
+    prompts_a = {f["prompt"][:100] for f in (run_a.get("failures") or [])}
+    new_failures = [
+        f for f in (run_b.get("failures") or [])
+        if f["prompt"][:100] not in prompts_a
+    ]
+
+    # Failures in run_a that are gone in run_b (fixed)
+    prompts_b = {f["prompt"][:100] for f in (run_b.get("failures") or [])}
+    fixed_failures = [
+        f for f in (run_a.get("failures") or [])
+        if f["prompt"][:100] not in prompts_b
+    ]
+
+    return {
+        "run_a": {
+            "run_id": run_id_a,
+            "trust_score": score_a,
+            "total_cases": run_a.get("total_cases", 0),
+            "total_passed": run_a.get("total_passed", 0),
+            "total_failed": run_a.get("total_failed", 0),
+            "agent_name": run_a.get("agent_name", ""),
+            "started_at": run_a.get("started_at", ""),
+        },
+        "run_b": {
+            "run_id": run_id_b,
+            "trust_score": score_b,
+            "total_cases": run_b.get("total_cases", 0),
+            "total_passed": run_b.get("total_passed", 0),
+            "total_failed": run_b.get("total_failed", 0),
+            "agent_name": run_b.get("agent_name", ""),
+            "started_at": run_b.get("started_at", ""),
+        },
+        "score_delta": score_delta,
+        "verdict": (
+            "improved" if score_delta > 0
+            else "regressed" if score_delta < 0
+            else "unchanged"
+        ),
+        "categories": category_diffs,
+        "new_failures": new_failures[:5],    # worst 5 regressions
+        "fixed_failures": fixed_failures[:5], # best 5 fixes
+    }

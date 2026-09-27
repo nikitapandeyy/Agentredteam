@@ -163,6 +163,31 @@ async def get_report(run_id: str) -> dict:
     return report
 
 
+@app.get("/compare")
+async def compare_runs(run_a: str, run_b: str) -> dict:
+    """Compare two test runs side by side.
+
+    Shows score delta, per-category changes, new failures
+    (regressions), and fixed failures (improvements).
+
+    Usage: GET /compare?run_a=abc123&run_b=def456
+    """
+    try:
+        from app.db.storage import get_comparison
+        result = get_comparison(run_a, run_b)
+    except Exception as e:
+        logger.error("Comparison failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"One or both runs not found: {run_a}, {run_b}",
+        )
+
+    return result
+
+
 @app.post("/run-test-suite", response_model=RunTestSuiteResponse)
 async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
     """Run a full adversarial test suite against the agent.

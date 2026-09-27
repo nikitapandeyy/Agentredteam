@@ -465,6 +465,24 @@
     <div id="failures-list"></div>
   </section>
 
+  <!-- Comparison section -->
+  <section id="compare-section" style="display:none; margin-bottom: 48px;">
+    <div class="section-heading">COMPARE RUNS</div>
+
+    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:16px;">
+      <select id="compare-a" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:2px;flex:1;min-width:200px;">
+        <option value="">Select run A (baseline)</option>
+      </select>
+      <span style="color:var(--muted);font-family:var(--mono);font-size:12px;">vs</span>
+      <select id="compare-b" style="background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:2px;flex:1;min-width:200px;">
+        <option value="">Select run B (new)</option>
+      </select>
+      <button class="btn primary" onclick="runComparison()">compare</button>
+    </div>
+
+    <div id="compare-result"></div>
+  </section>
+
 </div>
 
 <script>
@@ -541,6 +559,10 @@
       }).join('');
 
       setStatus('');
+      // Populate comparison dropdowns
+      populateCompareSelects(runs);
+      // Show comparison section only if there are 2+ runs
+      if (runs.length >= 2) showCompareSection();
       // Auto-load the most recent run
       loadRun(runs[0].run_id);
 
@@ -685,7 +707,141 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ── Boot ──────────────────────────────────────────────────────
+  // ── Show comparison section ─────────────────────────────────
+  function showCompareSection() {
+    document.getElementById('compare-section').style.display = '';
+  }
+
+  // ── Populate comparison selects ──────────────────────────────
+  function populateCompareSelects(runs) {
+    const selA = document.getElementById('compare-a');
+    const selB = document.getElementById('compare-b');
+    const opts = runs.map(r => {
+      const date = r.started_at
+        ? new Date(r.started_at).toLocaleString()
+        : '';
+      return `<option value="${r.run_id}">${date} — ${r.trust_score}/100 (${r.run_id})</option>`;
+    }).join('');
+    selA.innerHTML = '<option value="">Select run A (baseline)</option>' + opts;
+    selB.innerHTML = '<option value="">Select run B (new)</option>' + opts;
+    // Default: A = second most recent, B = most recent
+    if (runs.length >= 2) {
+      selA.value = runs[1].run_id;
+      selB.value = runs[0].run_id;
+    } else if (runs.length === 1) {
+      selB.value = runs[0].run_id;
+    }
+  }
+
+  // ── Run comparison ────────────────────────────────────────────
+  async function runComparison() {
+    const runA = document.getElementById('compare-a').value;
+    const runB = document.getElementById('compare-b').value;
+
+    if (!runA || !runB) {
+      setStatus('Select both runs to compare.', true);
+      return;
+    }
+    if (runA === runB) {
+      setStatus('Select two different runs to compare.', true);
+      return;
+    }
+
+    const container = document.getElementById('compare-result');
+    container.innerHTML = '<div style="color:var(--muted);font-family:var(--mono);font-size:12px;padding:16px 0;">Loading comparison...</div>';
+
+    try {
+      const res = await fetch(`${API}/compare?run_a=${runA}&run_b=${runB}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderComparison(data);
+    } catch (e) {
+      container.innerHTML = `<div style="color:var(--fail);font-family:var(--mono);font-size:12px;">Failed: ${escHtml(e.message)}</div>`;
+    }
+  }
+
+  // ── Render comparison result ──────────────────────────────────
+  function renderComparison(data) {
+    const container = document.getElementById('compare-result');
+    const delta = data.score_delta;
+    const deltaColor = delta > 0 ? 'var(--pass)' : delta < 0 ? 'var(--fail)' : 'var(--muted)';
+    const deltaSign = delta > 0 ? '+' : '';
+    const verdictColor = data.verdict === 'improved' ? 'var(--pass)'
+      : data.verdict === 'regressed' ? 'var(--fail)' : 'var(--muted)';
+
+    let html = `
+      <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:16px;margin-bottom:24px;align-items:center;">
+        <div style="text-align:center;border:1px solid var(--border);padding:16px;background:var(--surface);">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px;">RUN A — BASELINE</div>
+          <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:${data.run_a.trust_score >= 90 ? 'var(--pass)' : data.run_a.trust_score >= 60 ? 'var(--warn)' : 'var(--fail)'};">${data.run_a.trust_score}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">${data.run_a.run_id}</div>
+        </div>
+        <div style="text-align:center;">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:${deltaColor};">${deltaSign}${delta}</div>
+          <div style="font-family:var(--mono);font-size:10px;color:${verdictColor);">${data.verdict.toUpperCase()}</div>
+        </div>
+        <div style="text-align:center;border:1px solid var(--border);padding:16px;background:var(--surface);">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px;">RUN B — NEW</div>
+          <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:${data.run_b.trust_score >= 90 ? 'var(--pass)' : data.run_b.trust_score >= 60 ? 'var(--warn)' : 'var(--fail)'};">${data.run_b.trust_score}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">${data.run_b.run_id}</div>
+        </div>
+      </div>`;
+
+    // Category diffs
+    if (data.categories && data.categories.length > 0) {
+      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:12px;">BY CATEGORY</div>`;
+      html += `<div style="display:grid;grid-template-columns:1fr 80px 80px 100px;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;"><span>category</span><span style="text-align:right">run A</span><span style="text-align:right">run B</span><span style="text-align:right">change</span></div>`;
+
+      for (const cat of data.categories) {
+        const changeColor = cat.status === 'improved' ? 'var(--pass)'
+          : cat.status === 'regressed' ? 'var(--fail)' : 'var(--muted)';
+        const changeSign = cat.failed_delta < 0 ? '' : cat.failed_delta > 0 ? '+' : '';
+        const changeLabel = cat.failed_delta === 0 ? '—'
+          : `${changeSign}${cat.failed_delta} fail`;
+
+        html += `<div style="display:grid;grid-template-columns:1fr 80px 80px 100px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+          <span style="font-family:var(--mono);font-size:12px;">${cat.category.replace(/_/g,' ')}</span>
+          <span style="font-family:var(--mono);font-size:12px;text-align:right;color:${cat.run_a.failed > 0 ? 'var(--fail)' : 'var(--pass)'};">${cat.run_a.failed} fail</span>
+          <span style="font-family:var(--mono);font-size:12px;text-align:right;color:${cat.run_b.failed > 0 ? 'var(--fail)' : 'var(--pass)'};">${cat.run_b.failed} fail</span>
+          <span style="font-family:var(--mono);font-size:12px;text-align:right;color:${changeColor};">${changeLabel}</span>
+        </div>`;
+      }
+    }
+
+    // New failures (regressions)
+    if (data.new_failures && data.new_failures.length > 0) {
+      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--fail);border-bottom:1px solid var(--border);padding-bottom:6px;margin:20px 0 12px;">NEW FAILURES IN RUN B (${data.new_failures.length})</div>`;
+      for (const f of data.new_failures) {
+        html += `<div style="border-left:3px solid var(--fail);padding:10px 12px;background:var(--surface);margin-bottom:8px;">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--fail);margin-bottom:6px;">${f.category.replace(/_/g,' ')}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-bottom:6px;">${escHtml(f.prompt.slice(0,120))}...</div>
+          <div style="font-size:11px;color:var(--warn);background:rgba(210,153,34,.08);padding:6px 8px;">${escHtml(f.failure_reason || '')}</div>
+        </div>`;
+      }
+    }
+
+    // Fixed failures (improvements)
+    if (data.fixed_failures && data.fixed_failures.length > 0) {
+      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--pass);border-bottom:1px solid var(--border);padding-bottom:6px;margin:20px 0 12px;">FIXED IN RUN B (${data.fixed_failures.length})</div>`;
+      for (const f of data.fixed_failures) {
+        html += `<div style="border-left:3px solid var(--pass);padding:10px 12px;background:var(--surface);margin-bottom:8px;">
+          <div style="font-family:var(--mono);font-size:11px;color:var(--pass);margin-bottom:6px;">${f.category.replace(/_/g,' ')}</div>
+          <div style="font-family:var(--mono);font-size:12px;color:var(--text);">${escHtml(f.prompt.slice(0,120))}...</div>
+        </div>`;
+      }
+    }
+
+    container.innerHTML = html;
+    // Set verdict label color after DOM update
+    const vLabel = container.querySelector('#compare-verdict-label');
+    if (vLabel) {
+      vLabel.textContent = data.verdict.toUpperCase();
+      vLabel.style.color = data.verdict === 'improved' ? 'var(--pass)'
+        : data.verdict === 'regressed' ? 'var(--fail)' : 'var(--muted)';
+    }
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────
   loadRuns();
 </script>
 </body>
