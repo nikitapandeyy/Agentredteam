@@ -761,6 +761,10 @@
   }
 
   // ── Render comparison result ──────────────────────────────────
+  function scoreColor(s) {
+    return s >= 90 ? 'var(--pass)' : s >= 60 ? 'var(--warn)' : 'var(--fail)';
+  }
+
   function renderComparison(data) {
     const container = document.getElementById('compare-result');
     const delta = data.score_delta;
@@ -768,80 +772,84 @@
     const deltaSign = delta > 0 ? '+' : '';
     const verdictColor = data.verdict === 'improved' ? 'var(--pass)'
       : data.verdict === 'regressed' ? 'var(--fail)' : 'var(--muted)';
+    const verdictText = data.verdict.toUpperCase();
 
-    let html = `
-      <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:16px;margin-bottom:24px;align-items:center;">
-        <div style="text-align:center;border:1px solid var(--border);padding:16px;background:var(--surface);">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px;">RUN A — BASELINE</div>
-          <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:${data.run_a.trust_score >= 90 ? 'var(--pass)' : data.run_a.trust_score >= 60 ? 'var(--warn)' : 'var(--fail)'};">${data.run_a.trust_score}</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">${data.run_a.run_id}</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:${deltaColor};">${deltaSign}${delta}</div>
-          <div style="font-family:var(--mono);font-size:10px;color:${verdictColor};">${data.verdict.toUpperCase()}</div>
-        </div>
-        <div style="text-align:center;border:1px solid var(--border);padding:16px;background:var(--surface);">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px;">RUN B — NEW</div>
-          <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:${data.run_b.trust_score >= 90 ? 'var(--pass)' : data.run_b.trust_score >= 60 ? 'var(--warn)' : 'var(--fail)'};">${data.run_b.trust_score}</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--muted);">${data.run_b.run_id}</div>
-        </div>
-      </div>`;
+    let html = '';
+
+    // Score comparison header
+    html += '<div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:16px;margin-bottom:24px;align-items:center;">';
+
+    // Run A box
+    html += '<div style="text-align:center;border:1px solid var(--border);padding:16px;background:var(--surface);">';
+    html += '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px;">RUN A — BASELINE</div>';
+    html += '<div style="font-family:var(--mono);font-size:32px;font-weight:700;color:' + scoreColor(data.run_a.trust_score) + ';">' + data.run_a.trust_score + '</div>';
+    html += '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">' + escHtml(data.run_a.run_id) + '</div>';
+    html += '</div>';
+
+    // Delta box
+    html += '<div style="text-align:center;">';
+    html += '<div style="font-family:var(--mono);font-size:28px;font-weight:700;color:' + deltaColor + ';">' + deltaSign + delta + '</div>';
+    html += '<div style="font-family:var(--mono);font-size:10px;color:' + verdictColor + ';">' + verdictText + '</div>';
+    html += '</div>';
+
+    // Run B box
+    html += '<div style="text-align:center;border:1px solid var(--border);padding:16px;background:var(--surface);">';
+    html += '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:4px;">RUN B — NEW</div>';
+    html += '<div style="font-family:var(--mono);font-size:32px;font-weight:700;color:' + scoreColor(data.run_b.trust_score) + ';">' + data.run_b.trust_score + '</div>';
+    html += '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">' + escHtml(data.run_b.run_id) + '</div>';
+    html += '</div>';
+
+    html += '</div>';
 
     // Category diffs
     if (data.categories && data.categories.length > 0) {
-      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:12px;">BY CATEGORY</div>`;
-      html += `<div style="display:grid;grid-template-columns:1fr 80px 80px 100px;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;"><span>category</span><span style="text-align:right">run A</span><span style="text-align:right">run B</span><span style="text-align:right">change</span></div>`;
+      html += '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:12px;">BY CATEGORY</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 80px 80px 100px;gap:8px;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;"><span>category</span><span style="text-align:right">run A</span><span style="text-align:right">run B</span><span style="text-align:right">change</span></div>';
 
-      for (const cat of data.categories) {
+      data.categories.forEach(function(cat) {
         const changeColor = cat.status === 'improved' ? 'var(--pass)'
           : cat.status === 'regressed' ? 'var(--fail)' : 'var(--muted)';
-        const changeSign = cat.failed_delta < 0 ? '' : cat.failed_delta > 0 ? '+' : '';
+        const failA = cat.run_a.failed || 0;
+        const failB = cat.run_b.failed || 0;
         const changeLabel = cat.failed_delta === 0 ? '—'
-          : `${changeSign}${cat.failed_delta} fail`;
+          : (cat.failed_delta > 0 ? '+' : '') + cat.failed_delta + ' fail';
 
-        html += `<div style="display:grid;grid-template-columns:1fr 80px 80px 100px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
-          <span style="font-family:var(--mono);font-size:12px;">${cat.category.replace(/_/g,' ')}</span>
-          <span style="font-family:var(--mono);font-size:12px;text-align:right;color:${cat.run_a.failed > 0 ? 'var(--fail)' : 'var(--pass)'};">${cat.run_a.failed} fail</span>
-          <span style="font-family:var(--mono);font-size:12px;text-align:right;color:${cat.run_b.failed > 0 ? 'var(--fail)' : 'var(--pass)'};">${cat.run_b.failed} fail</span>
-          <span style="font-family:var(--mono);font-size:12px;text-align:right;color:${changeColor};">${changeLabel}</span>
-        </div>`;
-      }
+        html += '<div style="display:grid;grid-template-columns:1fr 80px 80px 100px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">';
+        html += '<span style="font-family:var(--mono);font-size:12px;">' + cat.category.replace(/_/g,' ') + '</span>';
+        html += '<span style="font-family:var(--mono);font-size:12px;text-align:right;color:' + (failA > 0 ? 'var(--fail)' : 'var(--pass)') + ';">' + failA + ' fail</span>';
+        html += '<span style="font-family:var(--mono);font-size:12px;text-align:right;color:' + (failB > 0 ? 'var(--fail)' : 'var(--pass)') + ';">' + failB + ' fail</span>';
+        html += '<span style="font-family:var(--mono);font-size:12px;text-align:right;color:' + changeColor + ';">' + changeLabel + '</span>';
+        html += '</div>';
+      });
     }
 
-    // New failures (regressions)
+    // New failures
     if (data.new_failures && data.new_failures.length > 0) {
-      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--fail);border-bottom:1px solid var(--border);padding-bottom:6px;margin:20px 0 12px;">NEW FAILURES IN RUN B (${data.new_failures.length})</div>`;
-      for (const f of data.new_failures) {
-        html += `<div style="border-left:3px solid var(--fail);padding:10px 12px;background:var(--surface);margin-bottom:8px;">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--fail);margin-bottom:6px;">${f.category.replace(/_/g,' ')}</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-bottom:6px;">${escHtml(f.prompt.slice(0,120))}...</div>
-          <div style="font-size:11px;color:var(--warn);background:rgba(210,153,34,.08);padding:6px 8px;">${escHtml(f.failure_reason || '')}</div>
-        </div>`;
-      }
+      html += '<div style="font-family:var(--mono);font-size:11px;color:var(--fail);border-bottom:1px solid var(--border);padding-bottom:6px;margin:20px 0 12px;">NEW FAILURES IN RUN B (' + data.new_failures.length + ')</div>';
+      data.new_failures.forEach(function(f) {
+        html += '<div style="border-left:3px solid var(--fail);padding:10px 12px;background:var(--surface);margin-bottom:8px;">';
+        html += '<div style="font-family:var(--mono);font-size:11px;color:var(--fail);margin-bottom:6px;">' + f.category.replace(/_/g,' ') + '</div>';
+        html += '<div style="font-family:var(--mono);font-size:12px;color:var(--text);margin-bottom:6px;">' + escHtml((f.prompt || '').slice(0,120)) + '...</div>';
+        html += '<div style="font-size:11px;color:var(--warn);background:rgba(210,153,34,.08);padding:6px 8px;">' + escHtml(f.failure_reason || '') + '</div>';
+        html += '</div>';
+      });
     }
 
-    // Fixed failures (improvements)
+    // Fixed failures
     if (data.fixed_failures && data.fixed_failures.length > 0) {
-      html += `<div style="font-family:var(--mono);font-size:11px;color:var(--pass);border-bottom:1px solid var(--border);padding-bottom:6px;margin:20px 0 12px;">FIXED IN RUN B (${data.fixed_failures.length})</div>`;
-      for (const f of data.fixed_failures) {
-        html += `<div style="border-left:3px solid var(--pass);padding:10px 12px;background:var(--surface);margin-bottom:8px;">
-          <div style="font-family:var(--mono);font-size:11px;color:var(--pass);margin-bottom:6px;">${f.category.replace(/_/g,' ')}</div>
-          <div style="font-family:var(--mono);font-size:12px;color:var(--text);">${escHtml(f.prompt.slice(0,120))}...</div>
-        </div>`;
-      }
+      html += '<div style="font-family:var(--mono);font-size:11px;color:var(--pass);border-bottom:1px solid var(--border);padding-bottom:6px;margin:20px 0 12px;">FIXED IN RUN B (' + data.fixed_failures.length + ')</div>';
+      data.fixed_failures.forEach(function(f) {
+        html += '<div style="border-left:3px solid var(--pass);padding:10px 12px;background:var(--surface);margin-bottom:8px;">';
+        html += '<div style="font-family:var(--mono);font-size:11px;color:var(--pass);margin-bottom:6px;">' + f.category.replace(/_/g,' ') + '</div>';
+        html += '<div style="font-family:var(--mono);font-size:12px;color:var(--text);">' + escHtml((f.prompt || '').slice(0,120)) + '</div>';
+        html += '</div>';
+      });
     }
 
     container.innerHTML = html;
-    // Set verdict label color after DOM update
-    const vLabel = container.querySelector('#compare-verdict-label');
-    if (vLabel) {
-      vLabel.textContent = data.verdict.toUpperCase();
-      vLabel.style.color = data.verdict === 'improved' ? 'var(--pass)'
-        : data.verdict === 'regressed' ? 'var(--fail)' : 'var(--muted)';
-    }
   }
 
-  // ── Boot ──────────────────────────────────────────────────────────
+    // ── Boot ──────────────────────────────────────────────────────────
   loadRuns();
 </script>
 </body>
