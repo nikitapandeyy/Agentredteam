@@ -152,19 +152,18 @@ def generate_from_template(
     template: AttackTemplate,
     client: genai.Client | None = None,
     delay: float = 2.0,
+    agent_context=None,
 ) -> list[TestCase]:
-    """Generate all variations for one template."""
-    if client is None:
-        client = genai.Client()
 
     model = os.environ["GEMINI_MODEL"]
     test_cases: list[TestCase] = []
+    context_str = agent_context.to_generator_context() if agent_context else ""
 
     for i in range(template.variations):
         if i > 0:
             time.sleep(delay)
 
-        user_prompt = _build_slot_prompt(template, i)
+        user_prompt = _build_slot_prompt(template, i, agent_context_str=context_str)
 
         try:
             raw = _call_gemini_with_retry(client, model, user_prompt)
@@ -204,39 +203,67 @@ def generate_all(
     categories: list[str] | None = None,
     delay: float = 2.0,
     agent_context=None,
+    include_encoding_attacks: bool = True,
 ) -> list[TestCase]:
     """Generate test cases for all templates, or only for specified categories.
 
     Args:
-        categories:    list of category names (None = all)
-        delay:         seconds between Gemini calls
-        agent_context: optional AgentContext for domain-specific attacks.
-                       If None, uses DEFAULT_CONTEXT (demo agent).
+        categories:              list of category names (None = all)
+        delay:                   seconds between Gemini calls
+        agent_context:           optional AgentContext for domain-specific attacks
+        include_encoding_attacks: if True, also generate encoding attacks
+                                  (Base64, ROT13, leet). These are deterministic
+                                  and require no LLM calls.
     """
     from app.attacks.context import DEFAULT_CONTEXT
+    from app.attacks.encoded_generator import generate_encoded_cases
+
     context = agent_context or DEFAULT_CONTEXT
 
     client = genai.Client()
     all_cases: list[TestCase] = []
 
-    templates = (
-        [t for t in TEMPLATES if t.category in categories]
-        if categories
-        else TEMPLATES
-    )
+    # Filter out encoding templates from LLM generation
+    # (they're handled by the deterministic encoder below)
+    encoding_ids = {
+        "encoding_base64_injection",
+        "encoding_rot13_injection",
+        "encoding_leet_exfiltration",
+    }
 
-    total = sum(t.variations for t in templates)
+    base_templates = [
+        t for t in TEMPLATES
+        if t.id not in encoding_ids
+        and (categories is None or t.category in categories)
+    ]
+
+    total = sum(t.variations for t in base_templates)
     logger.info(
         "Generating %d test cases from %d templates (context: %s)",
-        total, len(templates), context.purpose[:50],
+        total, len(base_templates), context.purpose[:50],
     )
 
-    for template in templates:
+    for template in base_templates:
         logger.info("Generating from template: %s", template.id)
         cases = generate_from_template(
             template, client=client, delay=delay, agent_context=context
         )
         all_cases.extend(cases)
         logger.info("  → %d/%d cases generated", len(cases), template.variations)
+
+    # Add encoding attacks (no LLM calls, deterministic)
+    if include_encoding_attacks:
+        should_include = (
+            categories is None
+            or "prompt_injection_direct" in categories
+            or "data_exfiltration" in categories
+        )
+        if should_include:
+            encoded = generate_encoded_cases()
+            all_cases.extend(encoded)
+            logger.info(
+                "Added %d encoding attack cases (base64, rot13, leet)",
+                len(encoded),
+            )
 
     return all_cases
