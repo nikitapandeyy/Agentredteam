@@ -422,6 +422,26 @@
     <div class="category-chips" id="chips"></div>
   </div>
 
+  <!-- External agent URL input -->
+  <div style="margin-bottom:24px;">
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px;">
+      EXTERNAL AGENT URL <span style="color:var(--border);">(optional — leave empty to use built-in demo agent)</span>
+    </div>
+    <input
+      id="agent-url-input"
+      type="text"
+      placeholder="https://your-agent.example.com/chat"
+      style="width:100%;max-width:560px;background:var(--surface);border:1px solid var(--border);
+             color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 12px;
+             border-radius:2px;outline:none;"
+      onfocus="this.style.borderColor='var(--pass)'"
+      onblur="this.style.borderColor='var(--border)'"
+    />
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;">
+      Your agent must accept: POST / with body {"message": "..."} and return {"reply": "..."}
+    </div>
+  </div>
+
   <!-- Trust score hero -->
   <section class="hero" id="hero" style="display:none">
     <div class="score-label">TRUST SCORE</div>
@@ -677,7 +697,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           categories: [...selectedCategories],
-          agent_name: 'Customer Support Agent v1',
+          agent_name: (document.getElementById('agent-url-input').value.trim()) ? 'External Agent' : 'Customer Support Agent v1',
+          agent_url: document.getElementById('agent-url-input').value.trim() || null,
         }),
       });
 

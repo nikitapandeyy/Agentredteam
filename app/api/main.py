@@ -259,9 +259,18 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
         logger.info("[%s] Applying rule-based scoring...", run_id)
         rule_scored = apply_rules_to_suite(results)
 
+        # Step 5b: PromptGuard pre-filter (fast, free, catches injections)
+        logger.info("[%s] Running PromptGuard pre-filter...", run_id)
+        from app.scoring.promptguard import apply_promptguard_to_suite
+        pg_results, pg_stats = apply_promptguard_to_suite(rule_scored)
+        logger.info(
+            "[%s] PromptGuard: checked=%d, injections=%d",
+            run_id, pg_stats["checked"], pg_stats["injections_found"],
+        )
+
         # Step 6: Score — judge
         logger.info("[%s] Applying LLM judge...", run_id)
-        final_results = judge_suite(rule_scored, delay=2.0, agent_context=agent_context)
+        final_results = judge_suite(pg_results, delay=2.0, agent_context=agent_context)
 
         # Step 7: Compute trust report
         report = compute_trust_score(
