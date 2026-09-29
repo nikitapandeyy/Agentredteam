@@ -84,24 +84,43 @@ async def startup() -> None:
 # Request / Response models
 # ---------------------------------------------------------------------------
 
+class UserApiKeys(BaseModel):
+    """Optional user-provided API keys (BYOK — Bring Your Own Keys).
+
+    If provided, these keys are used for this request only and never stored.
+    If not provided, the server falls back to its own environment variables.
+
+    Getting keys:
+      gemini: https://aistudio.google.com → Get API key (free tier available)
+      groq:   https://console.groq.com/keys (free tier available)
+    """
+    gemini: str | None = None
+    groq: str | None = None
+
+
 class RunTestSuiteRequest(BaseModel):
     categories: list[str] | None = None
     agent_name: str = "Customer Support Agent"
     agent_url: str | None = None
-    agent_context: dict | None = None  # AgentContext fields as a dict
+    agent_context: dict | None = None
+    api_keys: UserApiKeys | None = None  # BYOK: use caller's own quota
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
                     "categories": ["scope_bypass", "data_exfiltration"],
-                    "agent_name": "Legal Document Assistant",
+                    "agent_name": "My Production Agent",
                     "agent_url": "https://my-agent.example.com/chat",
                     "agent_context": {
-                        "purpose": "Summarise legal documents for law firms",
+                        "purpose": "Legal document assistant for law firms",
                         "sensitive_data": ["client names", "case details"],
                         "rules": ["Never share one client data with another"],
                         "example_topics": ["contract review", "NDA summary"],
+                    },
+                    "api_keys": {
+                        "gemini": "your-gemini-key-here",
+                        "groq": "your-groq-key-here",
                     },
                 },
                 {
@@ -221,7 +240,23 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
     )
 
     try:
-        # Step 1: Build agent context
+        # Step 1: Validate user-provided API keys (if any)
+        from app.auth.byok import use_api_keys, validate_user_keys
+        byok_gemini = None
+        byok_groq = None
+
+        if request.api_keys:
+            byok_gemini = request.api_keys.gemini
+            byok_groq = request.api_keys.groq
+
+            key_errors = validate_user_keys(byok_gemini, byok_groq)
+            if key_errors:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"API key validation failed: {key_errors}",
+                )
+
+        # Step 1b: Build agent context
         from app.attacks.context import AgentContext, DEFAULT_CONTEXT
         agent_context = (
             AgentContext(**request.agent_context)
@@ -229,13 +264,8 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
             else DEFAULT_CONTEXT
         )
 
-        # Step 2: Generate
+        # Step 2: Generate (inside BYOK context so keys are active)
         logger.info("[%s] Generating test cases...", run_id)
-        cases = generate_all(
-            categories=request.categories,
-            delay=2.0,
-            agent_context=agent_context,
-        )
 
         if not cases:
             raise HTTPException(
@@ -251,9 +281,10 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
         # Step 3: Save test cases (run record now exists)
         save_test_cases(cases, run_id)
 
-        # Step 4: Run against agent
+        # Step 4: Run against agent (BYOK active for Groq calls)
         logger.info("[%s] Running %d cases against agent...", run_id, len(cases))
-        results = run_suite(cases, agent_url=request.agent_url)
+        with use_api_keys(byok_gemini, byok_groq):
+            results = run_suite(cases, agent_url=request.agent_url)
 
         # Step 5: Score — rules
         logger.info("[%s] Applying rule-based scoring...", run_id)
@@ -268,9 +299,12 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
         # inference endpoint for this model becomes available.
         # pg_results, pg_stats = apply_promptguard_to_suite(rule_scored)
 
-        # Step 6: Score — judge
+        # Step 6: Score — judge (BYOK active for Gemini calls)
         logger.info("[%s] Applying LLM judge...", run_id)
-        final_results = judge_suite(rule_scored, delay=2.0, agent_context=agent_context)
+        with use_api_keys(byok_gemini, byok_groq):
+            final_results = judge_suite(
+                rule_scored, delay=2.0, agent_context=agent_context
+            )
 
         # Step 7: Compute trust report
         report = compute_trust_score(

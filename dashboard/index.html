@@ -442,6 +442,40 @@
     </div>
   </div>
 
+  <!-- BYOK: user API keys -->
+  <div style="margin-bottom:32px;">
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px;">
+      YOUR API KEYS <span style="color:var(--border);">(optional — use your own quota)</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:560px;">
+      <div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:4px;">GEMINI KEY</div>
+        <input id="gemini-key-input" type="password"
+          placeholder="AIza..."
+          style="width:100%;background:var(--surface);border:1px solid var(--border);
+                 color:var(--text);font-family:var(--mono);font-size:11px;
+                 padding:6px 10px;border-radius:2px;outline:none;"
+          onfocus="this.style.borderColor='var(--pass)'"
+          onblur="this.style.borderColor='var(--border)'"/>
+      </div>
+      <div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:4px;">GROQ KEY</div>
+        <input id="groq-key-input" type="password"
+          placeholder="gsk_..."
+          style="width:100%;background:var(--surface);border:1px solid var(--border);
+                 color:var(--text);font-family:var(--mono);font-size:11px;
+                 padding:6px 10px;border-radius:2px;outline:none;"
+          onfocus="this.style.borderColor='var(--pass)'"
+          onblur="this.style.borderColor='var(--border)'"/>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;">
+      Keys are used for this run only and never stored.
+      Get free keys: <a href="https://aistudio.google.com" target="_blank" style="color:var(--pass);">Gemini</a>
+      · <a href="https://console.groq.com/keys" target="_blank" style="color:var(--pass);">Groq</a>
+    </div>
+  </div>
+
   <!-- Trust score hero -->
   <section class="hero" id="hero" style="display:none">
     <div class="score-label">TRUST SCORE</div>
@@ -699,6 +733,10 @@
           categories: [...selectedCategories],
           agent_name: (document.getElementById('agent-url-input').value.trim()) ? 'External Agent' : 'Customer Support Agent v1',
           agent_url: document.getElementById('agent-url-input').value.trim() || null,
+          api_keys: {
+            gemini: document.getElementById('gemini-key-input').value.trim() || null,
+            groq: document.getElementById('groq-key-input').value.trim() || null,
+          },
         }),
       });
 
