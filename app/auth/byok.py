@@ -61,10 +61,10 @@ def validate_key_format(key: str, provider: str) -> tuple[bool, str]:
             return False, "Groq key appears too short"
 
     if provider == "gemini":
-        if key.startswith("gsk_"):
-            return False, "That looks like a Groq key, not a Gemini key"
-        if len(key) < 20:
+        if len(key) < 10:
             return False, "Gemini key appears too short"
+        # Note: Gemini key formats vary by region and API version
+        # We only do minimal validation to avoid false rejections
 
     return True, ""
 

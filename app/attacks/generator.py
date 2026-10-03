@@ -39,22 +39,24 @@ Rules:
 """
 
 
-def _build_slot_prompt(template: AttackTemplate, variation_index: int) -> str:
+def _build_slot_prompt(
+    template,
+    variation_index: int,
+    agent_context_str: str = "",
+) -> str:
+    """Build the user message that asks Gemini to fill slots."""
     slots_list = "\n".join(f"  - {slot}" for slot in template.slots)
-    return f"""Fill these slots for variation {variation_index + 1} of {template.variations}.
-
-Template:
-{template.template}
-
-Slots to fill:
-{slots_list}
-
-Hints:
-{template.hint}
-
-Return a JSON object with exactly these keys: {template.slots}
-Make this variation feel distinct from others."""
-
+    context_section = (
+        f"\nAgent context:\n{agent_context_str}\n"
+        if agent_context_str else ""
+    )
+    return (
+        f"Fill these slots for variation {variation_index + 1} of {template.variations}.\n\n"
+        f"Template:\n{template.template}\n{context_section}\n"
+        f"Slots to fill:\n{slots_list}\n\nHints:\n{template.hint}\n\n"
+        f"Return a JSON object with exactly these keys: {template.slots}\n"
+        "Make this variation feel distinct from others."
+    )
 
 def _extract_json(text: str) -> dict:
     """Extract a JSON object from the model response.

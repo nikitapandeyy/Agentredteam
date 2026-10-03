@@ -264,8 +264,14 @@ async def run_test_suite(request: RunTestSuiteRequest) -> RunTestSuiteResponse:
             else DEFAULT_CONTEXT
         )
 
-        # Step 2: Generate (inside BYOK context so keys are active)
+        # Step 2: Generate (inside BYOK context so Gemini key is active)
         logger.info("[%s] Generating test cases...", run_id)
+        with use_api_keys(byok_gemini, byok_groq):
+            cases = generate_all(
+                categories=request.categories,
+                delay=2.0,
+                agent_context=agent_context,
+            )
 
         if not cases:
             raise HTTPException(
