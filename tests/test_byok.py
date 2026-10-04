@@ -15,10 +15,10 @@ class TestKeyFormatValidation:
         assert valid is False
         assert "gsk_" in msg
 
-    def test_gemini_key_looks_like_groq(self):
-        valid, msg = validate_key_format("gsk_something", "gemini")
-        assert valid is False
-        assert "Groq" in msg
+    def test_gemini_key_accepts_any_format(self):
+        # Gemini key format varies — we do minimal validation only
+        valid, msg = validate_key_format("gsk_something_that_is_long_enough", "gemini")
+        assert valid is True  # we no longer reject gsk_ prefix for Gemini
 
     def test_empty_key_invalid(self):
         valid, msg = validate_key_format("", "groq")
